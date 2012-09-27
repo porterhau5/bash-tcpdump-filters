@@ -23,10 +23,15 @@ The idea is to have one place to store all of the interesting tcpdump filters I 
 Filters
 -------
 IP Fragments - Fragmented packets on a network can indicate that a host or network device is misconfigured or that someone might be trying to perform IDS/IPS evasion
+
 IP Options - Unlike TCP Options, IP Options aren't used frequently and should be paid attention to
+
 Evil bit - If this reserved bit is set then the packet is mostly likely crafted
+
 Reserved TCP flags - If these reserved bits are set, then the packet is most likely crafted
+
 ECN flags - Packets with ECN flags set (NS, CWR, ECE)
+
 
 TODO
 ----
