@@ -1,0 +1,129 @@
+#!/bin/bash
+
+# +---------------------------------------------------------------+
+# | Name: tcpdumpfilter                                           |
+# |                                                               |
+# | Purpose: Run a pcap through various tcpdump filters           |
+# |                                                               |
+# | Date: 2012/09/27                                              |
+# |                                                               |
+# | Usage: # . tcpdumpfilter                                      |
+# |        # filter <pcap>                                        |
+# |                                                               |
+# | Example: filter example.pcap                                  |
+# +---------------------------------------------------------------+
+
+# filter - runs several tcpdump filters against $1 and put the resultant
+#          text files in $2
+#	$1: input packet capture (pcap) file
+#	$2: directory where output files are written
+function filter() {
+	if [[ -z $1 || -z $2 ]]; then
+		echo "Usage: filter <input pcap> <output directory>"
+		echo "       <input pcap>         standard binary packet capture file (pcap)"
+		echo "       <output directory>   directory where output files are written"
+		return
+	fi
+
+	if [ ! -d $2 ]; then
+		mkdir -p $2
+	fi
+# +------------------+
+# |        IP        |
+# +------------------+
+#
+# IP options set
+# --------------
+# This checks the second half of the first byte in the IP header 
+#	by bitmasking the high order nibble and looking for a decimal
+#	value greater than 5 in the low order nibble (IHL).
+# Typically, IP options aren't set, which means the IHL should have a
+#	decimal value of 5 (equivalent to 20 bytes). If the decimal
+#	value of the IHL is greater than 5, that means there are
+#	IP options.
+tcpdump -nnXr $1 'ip[0] & 0x0f > 5' > $2/ipoptions.out
+# Fragmentation
+# -------------
+# The first set of parentheses checks for the MF flag set or any
+#	non-zero value in the first byte containing the frag offset.
+#	The second set of parentheses checks for any non-zero value in
+#	the rest of the frag offset field.
+# Fragmentation isn't found on most networks, and fragmented packets
+#	are often used for IDS/IPS evasion. Both of these things
+#	make these packets worth identifying.
+tcpdump -nnXr $1 '(ip[6] & 0x3f != 0) or (ip[7] != 0)' > $2/ipfragments.out
+# Evil bit
+# --------
+# This checks for a non-zero value at the first bit of the fragmentation 
+#	flags field by bitmasking the first bit of the byte at offset 6
+# The reserved bit of the fragmentation flags is also known as the "evil
+#	bit", popularized by RFC 3514. It was written by Steve Bellovin
+#	on April Fools' Day, and called for the use of this unused bit
+#	to be a marker for evil packets.
+tcpdump -nnXr $1 'ip[6] & 0x80 != 0' > $2/ipevilbit.out
+
+# +------------------+
+# |       TCP        |
+# +------------------+
+# To be pedantic, TCP doesn't use "flags", it uses "control bits". For
+# simplicity's sake, I'll refer to the control bits as flags.
+#
+# TCP reserved bits
+# -----------------
+# This checks for a non-zero value in the low order nibble of the 12th
+#	byte offset with the exception of the least-significant bit.
+# These reserved bits should never be flipped on. If they are, this is
+#	the sign of a crafted packet.
+tcpdump -nnXr $1 'tcp[12] & 0x0e != 0' > $2/tcpreservedbits.out
+
+# CWR and/or ECE TCP flags
+# ------------------------
+# This checks the last bit of the 12th byte offest and the first two bits
+#	of the byte that contains the TCP flags by bitmasking the three
+#	bits and checking for a non-zero value.
+tcpdump -nnXr $1 'tcp[12:2] & 0x01c0 != 0' > $2/tcpecnflags.out
+
+}
+
+# +----------------+
+# | Reference info |
+# +----------------+
+
+# IPv4 Header
+#
+#     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#  0 |Version|  IHL  |Type of Service|          Total Length         |
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#  4 |         Identification        |R M D|      Fragment Offset    |
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#  8 |  Time to Live |    Protocol   |         Header Checksum       |
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+# 12 |                       Source Address                          |
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+# 16 |                    Destination Address                        |
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+# 20 |                    Options                    |    Padding    | <-- optional
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+
+
+# TCP Header
+#
+#     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#  0 |          Source Port          |       Destination Port        |
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#  4 |                        Sequence Number                        |
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#  8 |                    Acknowledgment Number                      |
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#    |  Data |     |N|C|E|U|A|P|R|S|F|                               |
+# 12 | Offset| Res.|S|W|C|R|C|S|S|Y|I|            Window             | 
+#    |       |     | |R|E|G|K|H|T|N|N|                               |
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+# 16 |           Checksum            |         Urgent Pointer        |
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+# 20 |                            Options                            |
+# .. |                              ...                              |
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
