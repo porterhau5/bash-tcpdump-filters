@@ -95,7 +95,7 @@ tcpdump -nnXr $1 'tcp[12:2] & 0x01c0 != 0' > $2/tcpecnflags.out
 #    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 #  0 |Version|  IHL  |Type of Service|          Total Length         |
 #    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#  4 |         Identification        |R M D|      Fragment Offset    |
+#  4 |         Identification        |R D M|      Fragment Offset    |
 #    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 #  8 |  Time to Live |    Protocol   |         Header Checksum       |
 #    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
