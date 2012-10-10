@@ -44,14 +44,12 @@ function filter() {
 tcpdump -nnXr $1 'ip[0] & 0x0f > 5' > $2/ipoptions.out
 # Fragmentation
 # -------------
-# The first set of parentheses checks for the MF flag set or any
-#	non-zero value in the first byte containing the frag offset.
-#	The second set of parentheses checks for any non-zero value in
-#	the rest of the frag offset field.
+# This checks if the MF flag is set or if there is any non-zero value
+#	in the frag offset field.
 # Fragmentation isn't found on most networks, and fragmented packets
 #	are often used for IDS/IPS evasion. Both of these things
 #	make these packets worth identifying.
-tcpdump -nnXr $1 '(ip[6] & 0x3f != 0) or (ip[7] != 0)' > $2/ipfragments.out
+tcpdump -nnXr $1 'ip[6:2] & 0x3fff != 0' > $2/ipfragments.out
 # Evil bit
 # --------
 # This checks for a non-zero value at the first bit of the fragmentation 
@@ -59,7 +57,8 @@ tcpdump -nnXr $1 '(ip[6] & 0x3f != 0) or (ip[7] != 0)' > $2/ipfragments.out
 # The reserved bit of the fragmentation flags is also known as the "evil
 #	bit", popularized by RFC 3514. It was written by Steve Bellovin
 #	on April Fools' Day, and called for the use of this unused bit
-#	to be a marker for evil packets.
+#	to be a marker for evil packets. Unfortunately, most attackers
+#	aren't RFC compliant :(
 tcpdump -nnXr $1 'ip[6] & 0x80 != 0' > $2/ipevilbit.out
 
 # +------------------+
